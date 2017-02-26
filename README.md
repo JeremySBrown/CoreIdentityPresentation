@@ -67,9 +67,21 @@ The first section tells ASP.NET that Identity is being added and to use the Appl
 
 The second section adds the MembershipDbContext to the service container and to use SQL Server.
 
-8 Open the appsettings.json file and add the following after the Logging section.
+8. In the Configure method of Startup.cs add the following before app.UseMvc()
+```C#
+app.UseIdentity();
+```
+
+9. Open the appsettings.json file and add the following after the Logging section.
 ```javascript
   "Data": {
     "ConnectionString": "Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=IdentityDemo;Integrated Security=True;Connect Timeout=30;Encrypt=False;TrustServerCertificate=True;ApplicationIntent=ReadWrite;MultiSubnetFailover=False"
   }
+```
+10. Open a command prompt to the project's folder and use the following commands buld the database
+```
+dotnet ef migrations add AddIdentitySupport -c IdentityDemo.Membership.MembershipDbContext
+```
+```
+dotnet database update
 ```
