@@ -34,7 +34,8 @@
         "MembershipDbContext",
         "IdentityDbContext",
         "IdentityUser",
-        "ApplicationUser"
+        "ApplicationUser",
+        "InitMembership"
     ],
     "documentTypes": [
         "markdown",
