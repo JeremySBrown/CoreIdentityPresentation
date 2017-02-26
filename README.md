@@ -202,3 +202,105 @@ dotnet ef migrations add AddIdentitySupport
 ```
 dotnet ef database update
 ```
+14. Run the application to launch the site and seed the database.
+```
+dotnet run
+```
+
+
+## DEMO 2: Adding Authentication Support
+1. Add a Models folder to the project root and 
+2. In the Models folder add a new class named "Credentials.cs", and add the following:
+```c#
+namespace IdentityDemo.Models
+{
+    public class Credentials
+    {
+        [Required]
+        public string UserName { get; set; }
+        [Required]
+        public string Password { get; set; }
+    }
+}
+```
+3. Add a new Controller class to the Controller folder named "AuthController.cs".
+4. Add the following code:
+```c#
+namespace IdentityDemo.Controllers
+{
+    [Route("api/[controller]")]
+    public class AuthController : Controller
+    {
+        private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly ILogger<AuthController> _logger;
+
+        public AuthController(SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ILogger<AuthController> logger)
+        {
+            _signInManager = signInManager;
+            _userManager = userManager;
+            _roleManager = roleManager;
+            _logger = logger;
+        }
+
+        [HttpPost]
+        [Route("login")]
+        public async Task<IActionResult> Login([FromBody] Credentials credentials)
+        {
+            try
+            {
+                var result = await _signInManager.PasswordSignInAsync(credentials.UserName, credentials.Password, false,
+                    false);
+                if (result.Succeeded)
+                {
+                    return Ok();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex.Message, ex.StackTrace);
+            }
+
+            return BadRequest("Login Failed");
+        }
+    }
+}
+```
+5. Open the ValuesController.cs and add the [Authorize] attribute to the class. Should look like the following.
+```c#
+    [Route("api/[controller]")]
+    [Authorize]
+    public class ValuesController : Controller
+```
+6. Open Startup.cs class and add the follow to ConfigureServices method:
+```c#
+services.Configure<IdentityOptions>(options =>
+{
+    options.Cookies.ApplicationCookie.Events =
+    new CookieAuthenticationEvents()
+    {
+        OnRedirectToLogin = (context) =>
+        {
+            if (context.Response.StatusCode == 200)
+            {
+                context.Response.StatusCode = 401;
+            }
+
+            return Task.CompletedTask;
+        },
+        OnRedirectToAccessDenied = (context) =>
+        {
+            if (context.Response.StatusCode == 200)
+            {
+                context.Response.StatusCode = 403;
+            }
+
+            return Task.CompletedTask;
+        }
+    };
+});
+```
+By default Identity will redirect to the a login page which does not exist in an API. The above code simply adds handlers for the Application Cookie events for redirecting and just return standard status codes.
+
+7. Using Postman to test Login and Values
