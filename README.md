@@ -395,3 +395,163 @@ public async Task<IActionResult> CreateToken([FromBody]Credentials credentials)
     return BadRequest("Token Creation Failed");
 }
 ```
+
+## DEMO 4: Applying Authorization
+1. Add a new class named "Document.cs" to Models folder with the following code:
+```c#
+namespace IdentityDemo.Models
+{
+    public class Document
+    {
+        public Document()
+        {
+            
+        }
+
+        public Document(int id, string content, string department, string owner, bool managerOnly)
+        {
+            Id = id;
+            Content = content;
+            Department = department;
+            Owner = owner;
+            ManagerOnly = managerOnly;
+        }
+
+        public int Id { get; set; }
+
+        [Required]
+        public string Content { get; set; }
+
+        [Required]
+        public string Department { get; set; }
+
+        public string Owner { get; set; }
+        public bool ManagerOnly { get; set; }
+    }
+}
+```
+2. Add a new Controller named "DocumentsController.cs" with the following code:
+```c#
+namespace IdentityDemo.Controllers
+{
+    [Route("api/[controller]")]
+    public class DocumentsController : Controller
+    {
+        private ILogger<DocumentsController> _logger;
+
+        public DocumentsController(ILogger<DocumentsController> logger)
+        {
+            _logger = logger;
+        }
+
+        [HttpGet]
+        [Route("")]
+        public IActionResult GetPublicDocuments()
+        {
+            _logger.LogInformation("Public Documents were accessed.");
+            var result = GetDocuments().Where(p => p.Department == "All" && !p.ManagerOnly);
+
+            return Ok(result);
+        }
+
+        [HttpGet]
+        [Route("{id:int}")]
+        public IActionResult GetPublicDocument(int id)
+        {
+            _logger.LogInformation("Public Documents were accessed.");
+
+            var result = GetDocuments().FirstOrDefault(d=>d.Id==id);
+
+            if (result == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(result);
+        }
+
+        [HttpGet]
+        [Route("managers")]
+        public IActionResult GetManagerDocuments()
+        {
+            _logger.LogInformation("Manager Documents were accessed.");
+            var result = GetDocuments()
+                .Where(p=>p.ManagerOnly);
+
+            return Ok(result);
+        }
+
+        [HttpGet]
+        [Route("department/{id}")]
+        public IActionResult GetByDepartment(string id)
+        {
+            _logger.LogInformation($"{id} Documents were accessed.");
+
+            var result = GetDocuments()
+                .Where(p => p.Department.Equals(id,StringComparison.CurrentCultureIgnoreCase) && !p.ManagerOnly);
+
+            return Ok(result);
+        }
+
+        [HttpPost]
+        public IActionResult CreateDepartmentDocument([FromBody] Document model)
+        {
+
+
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            model.Id = GetDocuments().Count() + 1;
+            model.Owner = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            _logger.LogInformation("Document created");
+
+            return Ok(model);
+        }
+
+        [HttpPut]
+        [Route("{id:int}")]
+        public IActionResult UpdateDeparmentDocument(int id, [FromBody] Document model)
+        {
+            var payload = GetDocuments().FirstOrDefault(p => p.Id == id);
+            if (payload == null)
+            {
+                return NotFound();
+            }
+
+            payload.Content = model.Content;
+            payload.Department = model.Department;
+            payload.ManagerOnly = model.ManagerOnly;
+            payload.Owner = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            _logger.LogInformation("Document Modified");
+            return Ok(payload);
+        }
+
+        private List<Document> GetDocuments()
+        {
+            return new List<Document>()
+            {
+                new Document(1, "Public Document 1", "All", "cwilliams", false),
+                new Document(2, "Public Document 2", "All", "djones", false),
+                new Document(3, "Manager Document 1", "All", "djones", true),
+                new Document(4, "Manager Document 2", "IT", "cwilliams", true),
+                new Document(5, "Sales Document 1", "Sales", "asmith", false),
+                new Document(6, "IT Document 1", "IT", "bjohnson", false),
+            };
+        }
+    }
+}
+```
+3. Test API endpoints with PostMan.
+4. Add [Authorize] attribute to DocumentsController. Should look like below.
+```c#
+[Route("api/[controller]")]
+[Authorize]
+public class DocumentsController : Controller
+{
+    ... Rest of class
+}
+```
+5. Log In with Staff account and test endpoints again.
