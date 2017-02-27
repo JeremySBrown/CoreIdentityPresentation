@@ -177,7 +177,7 @@ namespace IdentityDemo.Membership
     }
 }
 ```
-11. In Startup.cs ConfigureService method add the following at the end.
+11. In Startup.cs ConfigureServices method add the following at the end.
 ```c#
 services.AddTransient<InitMembership>();
 ```
@@ -231,17 +231,21 @@ namespace IdentityDemo.Controllers
     [Route("api/[controller]")]
     public class AuthController : Controller
     {
-        private readonly SignInManager<ApplicationUser> _signInManager;
-        private readonly UserManager<ApplicationUser> _userManager;
-        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly ILogger<AuthController> _logger;
+        private readonly UserManager<WidgetUser> _userManager;
+        private readonly IPasswordHasher<WidgetUser> _passwordHasher;
+        private readonly IConfigurationRoot _configuration;
 
-        public AuthController(SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ILogger<AuthController> logger)
+        public AuthController(
+            ILogger<AuthController> logger,
+            UserManager<WidgetUser> userManager,
+            IPasswordHasher<WidgetUser> passwordHasher,
+            IConfigurationRoot configuration)
         {
-            _signInManager = signInManager;
-            _userManager = userManager;
-            _roleManager = roleManager;
             _logger = logger;
+            _userManager = userManager;
+            _passwordHasher = passwordHasher;
+            _configuration = configuration;
         }
 
         [HttpPost]
@@ -273,7 +277,11 @@ namespace IdentityDemo.Controllers
     [Authorize]
     public class ValuesController : Controller
 ```
-6. Open Startup.cs class and add the follow to ConfigureServices method:
+6. Open Startup.cs and add the following as the first line in the  method.
+```c#
+services.AddSingleton(Configuration);
+```
+7. Then add the follow to ConfigureServices method before services.addMvc():
 ```c#
 services.Configure<IdentityOptions>(options =>
 {
@@ -303,4 +311,87 @@ services.Configure<IdentityOptions>(options =>
 ```
 By default Identity will redirect to the a login page which does not exist in an API. The above code simply adds handlers for the Application Cookie events for redirecting and just return standard status codes.
 
-7. Using Postman to test Login and Values
+8. Using Postman to test Login and Values
+
+## DEMO 3: Adding JWT to ASP.NET API Project
+1. Open project.json and add the following to dependencies:
+```
+"Microsoft.AspNetCore.Authentication.JwtBearer": "1.0.1",
+"System.IdentityModel.Tokens.Jwt": "5.1.2"
+```
+2. Open Startup.cs and add the following before app.UseIdentity() in the Configure Method.
+```c#
+app.UseJwtBearerAuthentication(new JwtBearerOptions()
+{
+    AutomaticAuthenticate = true,
+    AutomaticChallenge = true,
+    
+    TokenValidationParameters = new TokenValidationParameters()
+    {
+        ValidIssuer = Configuration["Tokens:Issuer"],
+        ValidAudience = Configuration["Tokens:Audience"],
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration["Tokens:Key"])),
+        ValidateLifetime = true
+    }
+});
+```
+3. Open appsettings.json and add the following after "Data":
+```
+  "Tokens": {
+    "Key": "CyAFooBarQuuxIsTheStandardTypeOfStringWeUse12345",
+    "Issuer": "http://fakecompany.io",
+    "Audience": "http://fakecompany.io"
+  }
+```  
+4. Open the AuthController.cs and add the following method:
+```c#
+[HttpPost]
+[Route("token")]
+public async Task<IActionResult> CreateToken([FromBody]Credentials credentials)
+{
+    try
+    {
+        var user = await _userManager.FindByNameAsync(credentials.UserName);
+        if (user != null)
+        {
+            if (_passwordHasher.VerifyHashedPassword(user, user.PasswordHash, credentials.Password) ==
+                PasswordVerificationResult.Success)
+            {
+                var userClaims = await _userManager.GetClaimsAsync(user);
+                var claims = new[]
+                {
+                    new Claim(JwtRegisteredClaimNames.Sub, user.UserName),
+                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                    new Claim(JwtRegisteredClaimNames.GivenName, user.FirstName),
+                    new Claim(JwtRegisteredClaimNames.FamilyName, user.LastName),
+                    new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                    new Claim("department", user.Department),
+                }.Union(userClaims);
+
+                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Tokens:Key"]));
+                var signingCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+                var token = new JwtSecurityToken(
+                    issuer: _configuration["Tokens:Issuer"],
+                    audience: _configuration["Tokens:Audience"],
+                    claims: claims,
+                    expires: DateTime.UtcNow.AddMinutes(30),
+                    signingCredentials: signingCredentials);
+
+                return Ok(new
+                {
+                    token = new JwtSecurityTokenHandler().WriteToken(token),
+                    expirations = token.ValidTo
+                });
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex.Message, ex.StackTrace);
+    }
+
+    return BadRequest("Token Creation Failed");
+}
+```

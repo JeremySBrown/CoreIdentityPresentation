@@ -37,7 +37,10 @@
         "ApplicationUser",
         "InitMembership",
         "AuthController",
-        "ValuesController"
+        "ValuesController",
+        "loggerFactory",
+        "UseIdentity",
+        "addMvc"
     ],
     "documentTypes": [
         "markdown",
