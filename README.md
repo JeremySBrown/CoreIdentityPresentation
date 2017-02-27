@@ -554,4 +554,18 @@ public class DocumentsController : Controller
     ... Rest of class
 }
 ```
-5. Log In with Staff account and test endpoints again.
+5. Run Wide Open API Calls Tests
+6. Log In with Staff account and test endpoints again.
+7. Change [Authorize] attribute to:
+```c#
+[Authorize(Roles="Staff,Manager")]
+```
+8. Rerun Staff Tests
+9. Change GetManagerDocuments method to:
+```c#
+[HttpGet]
+[Route("managers")]
+[Authorize(Roles="Manager")]
+public IActionResult GetManagerDocuments()
+```
+10. Rerun Staff Tests
