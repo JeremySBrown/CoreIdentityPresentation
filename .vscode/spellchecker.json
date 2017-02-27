@@ -41,7 +41,8 @@
         "loggerFactory",
         "UseIdentity",
         "addMvc",
-        "DocumentsController"
+        "DocumentsController",
+        "GetManagerDocuments"
     ],
     "documentTypes": [
         "markdown",

@@ -86,9 +86,8 @@ namespace IdentityDemo.Membership
 {
     public class InitMembership
     {
-        private RoleManager<IdentityRole> _roleManager;
-        private UserManager<ApplicationUser> _userManager;
-
+        private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly UserManager<ApplicationUser> _userManager;
 
         public InitMembership(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
         {
@@ -108,6 +107,7 @@ namespace IdentityDemo.Membership
             await AddUser("djones", "D", "Jones", "djones@fakecompany.com", "Sales", "Manager");
             await AddUser("bjohnson", "B", "Johson", "bjohnson@fakecompany.com", "IT", "Staff");
             await AddUser("cwilliams", "C", "Williams", "cwilliams@fakecompany.com", "IT", "Manager");
+            await AddUser("emiller", "E", "Miller", "emiller@fakecompany.com", "", "Intern");
             
         }
 
@@ -358,16 +358,32 @@ public async Task<IActionResult> CreateToken([FromBody]Credentials credentials)
             if (_passwordHasher.VerifyHashedPassword(user, user.PasswordHash, credentials.Password) ==
                 PasswordVerificationResult.Success)
             {
+                // Get Existing User Claims
                 var userClaims = await _userManager.GetClaimsAsync(user);
-                var claims = new[]
+
+                // Add Claims from WidgetUser
+                var claims = new List<Claim>
                 {
                     new Claim(JwtRegisteredClaimNames.Sub, user.UserName),
                     new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                     new Claim(JwtRegisteredClaimNames.GivenName, user.FirstName),
                     new Claim(JwtRegisteredClaimNames.FamilyName, user.LastName),
                     new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                    new Claim("department", user.Department),
-                }.Union(userClaims);
+                };
+                if (!string.IsNullOrEmpty(user.Department))
+                {
+                    claims.Add(new Claim("Department",user.Department));
+                }
+
+                // Add Roles the User Belongs To
+                var roles = await _userManager.GetRolesAsync(user);
+                foreach (var role in roles)
+                {
+                    claims.Add(new Claim(ClaimTypes.Role, role));
+                }
+
+                // Combined existing claims with new
+                claims = claims.Union(userClaims).ToList();
 
                 var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Tokens:Key"]));
                 var signingCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -390,6 +406,7 @@ public async Task<IActionResult> CreateToken([FromBody]Credentials credentials)
     catch (Exception ex)
     {
         _logger.LogError(ex.Message, ex.StackTrace);
+        return StatusCode(StatusCodes.Status500InternalServerError, ex);
     }
 
     return BadRequest("Token Creation Failed");
@@ -437,11 +454,14 @@ namespace IdentityDemo.Controllers
     [Route("api/[controller]")]
     public class DocumentsController : Controller
     {
-        private ILogger<DocumentsController> _logger;
+        private readonly ILogger<DocumentsController> _logger;
+        private readonly IAuthorizationService _authorizationService;
 
-        public DocumentsController(ILogger<DocumentsController> logger)
+
+        public DocumentsController(ILogger<DocumentsController> logger, IAuthorizationService authorizationService)
         {
             _logger = logger;
+            _authorizationService = authorizationService;
         }
 
         [HttpGet]
@@ -449,55 +469,52 @@ namespace IdentityDemo.Controllers
         public IActionResult GetPublicDocuments()
         {
             _logger.LogInformation("Public Documents were accessed.");
-            var result = GetDocuments().Where(p => p.Department == "All" && !p.ManagerOnly);
+            var department = User.FindFirstValue("Department");
+            var result = GetDocuments()
+                .Where(
+                    p =>
+                        (p.Department == "All" ||
+                         p.Department.Equals(department, StringComparison.CurrentCultureIgnoreCase))
+                        && !p.ManagerOnly);
 
             return Ok(result);
         }
 
         [HttpGet]
         [Route("{id:int}")]
-        public IActionResult GetPublicDocument(int id)
+        public IActionResult GetDocument(int id)
         {
-            _logger.LogInformation("Public Documents were accessed.");
+            _logger.LogInformation($"Public Document {id} were accessed.");
 
-            var result = GetDocuments().FirstOrDefault(d=>d.Id==id);
+            var result = GetDocuments().FirstOrDefault(d => d.Id == id);
 
             if (result == null)
             {
                 return NotFound();
-            }
+            }            
 
             return Ok(result);
         }
 
         [HttpGet]
-        [Route("managers")]
+        [Route("managers")]        
         public IActionResult GetManagerDocuments()
         {
             _logger.LogInformation("Manager Documents were accessed.");
-            var result = GetDocuments()
-                .Where(p=>p.ManagerOnly);
+            var department = User.FindFirstValue("Department");
+            var documents = GetDocuments()
+                .Where(
+                    p =>
+                        (p.Department == "All" ||
+                         p.Department.Equals(department, StringComparison.CurrentCultureIgnoreCase))
+                        && p.ManagerOnly);
 
-            return Ok(result);
-        }
-
-        [HttpGet]
-        [Route("department/{id}")]
-        public IActionResult GetByDepartment(string id)
-        {
-            _logger.LogInformation($"{id} Documents were accessed.");
-
-            var result = GetDocuments()
-                .Where(p => p.Department.Equals(id,StringComparison.CurrentCultureIgnoreCase) && !p.ManagerOnly);
-
-            return Ok(result);
+            return Ok(documents);
         }
 
         [HttpPost]
         public IActionResult CreateDepartmentDocument([FromBody] Document model)
         {
-
-
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
@@ -514,19 +531,35 @@ namespace IdentityDemo.Controllers
         [Route("{id:int}")]
         public IActionResult UpdateDeparmentDocument(int id, [FromBody] Document model)
         {
-            var payload = GetDocuments().FirstOrDefault(p => p.Id == id);
-            if (payload == null)
+            var document = GetDocuments().FirstOrDefault(p => p.Id == id);
+            if (document == null)
             {
                 return NotFound();
             }
 
-            payload.Content = model.Content;
-            payload.Department = model.Department;
-            payload.ManagerOnly = model.ManagerOnly;
-            payload.Owner = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            document.Content = model.Content;
+            document.Department = model.Department;
+            document.ManagerOnly = model.ManagerOnly;
+            document.Owner = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             _logger.LogInformation("Document Modified");
-            return Ok(payload);
+            return Ok(document);
+        }
+
+        [HttpDelete]
+        [Route("{id:int}")]        
+        public IActionResult DeleteDocument(int id)
+        {
+            _logger.LogInformation("Public Documents were accessed.");
+
+            var document = GetDocuments().FirstOrDefault(d => d.Id == id);
+
+            if (document == null)
+            {
+                return NotFound();
+            }
+
+            return StatusCode(StatusCodes.Status202Accepted);
         }
 
         private List<Document> GetDocuments()
@@ -569,3 +602,11 @@ public class DocumentsController : Controller
 public IActionResult GetManagerDocuments()
 ```
 10. Rerun Staff Tests
+
+## Enforcing Policies on Document API
+1. Only members of the Staff and Manager roles can access API
+2. Members can only view documents for their department or flagged as All.
+3. Only Managers can view documents flagged as Manager Only.
+4. Members can create documents for their departments or All.
+5. Members can only edit their own documents.
+6. Only Managers of the IT Department can delete documents.
