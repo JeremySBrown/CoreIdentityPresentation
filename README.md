@@ -468,16 +468,12 @@ namespace IdentityDemo.Controllers
         [Route("")]
         public IActionResult GetPublicDocuments()
         {
-            _logger.LogInformation("Public Documents were accessed.");
-            var department = User.FindFirstValue("Department");
-            var result = GetDocuments()
-                .Where(
-                    p =>
-                        (p.Department == "All" ||
-                         p.Department.Equals(department, StringComparison.CurrentCultureIgnoreCase))
-                        && !p.ManagerOnly);
+           _logger.LogInformation("Public Documents were accessed.");
+            
+            var documents = GetDocuments()
+                .Where(p => p.Department == "All" && !p.ManagerOnly);
 
-            return Ok(result);
+            return Ok(documents);
         }
 
         [HttpGet]
@@ -501,13 +497,9 @@ namespace IdentityDemo.Controllers
         public IActionResult GetManagerDocuments()
         {
             _logger.LogInformation("Manager Documents were accessed.");
-            var department = User.FindFirstValue("Department");
+
             var documents = GetDocuments()
-                .Where(
-                    p =>
-                        (p.Department == "All" ||
-                         p.Department.Equals(department, StringComparison.CurrentCultureIgnoreCase))
-                        && p.ManagerOnly);
+                .Where(p => p.ManagerOnly);
 
             return Ok(documents);
         }
@@ -577,7 +569,7 @@ namespace IdentityDemo.Controllers
     }
 }
 ```
-3. Test API endpoints with PostMan.
+3. Run Wide Open API Calls in Postman. Should get 200s
 4. Add [Authorize] attribute to DocumentsController. Should look like below.
 ```c#
 [Route("api/[controller]")]
@@ -587,26 +579,261 @@ public class DocumentsController : Controller
     ... Rest of class
 }
 ```
-5. Run Wide Open API Calls Tests
-6. Log In with Staff account and test endpoints again.
-7. Change [Authorize] attribute to:
+5. Rerun Wide Open API Calls in Postman. Should get 401s
+6. Login with "Intern" User Account, and test Get Documents API call
+
+
+## Enforcing Policies on Document API
+The Document Controller is now setup to only allow authenticated users, but that is not enough because any authenticated user can perform CRUD operations on documents and Read documents only permitted to managers.
+
+Below are 6 requirements that need to be applied to the Document Controller. We'll use a combination of Roles, Claims and Policies to achieve this.
+
+1. Only members of the Staff and Manager roles can access API
+2. Only Managers can view documents flagged as Manager Only.
+3. Only Managers of the IT Department can delete documents.
+4. Members can only view documents from their department or flagged as All.
+5. Members can create documents for their departments or All.
+6. Documents can only be modified by owners or department managers.
+
+
+
+### Only members of the Staff and Manager roles can access API &amp; Only Managers can view documents flagged as Manager Only.
+1. Change [Authorize] attribute to:
 ```c#
 [Authorize(Roles="Staff,Manager")]
 ```
-8. Rerun Staff Tests
-9. Change GetManagerDocuments method to:
+2. Change GetManagerDocuments method to:
 ```c#
 [HttpGet]
 [Route("managers")]
 [Authorize(Roles="Manager")]
 public IActionResult GetManagerDocuments()
 ```
-10. Rerun Staff Tests
+3. Test results in Postman
 
-## Enforcing Policies on Document API
-1. Only members of the Staff and Manager roles can access API
-2. Members can only view documents for their department or flagged as All.
-3. Only Managers can view documents flagged as Manager Only.
-4. Members can create documents for their departments or All.
-5. Members can only edit their own documents.
-6. Only Managers of the IT Department can delete documents.
+Applying Roles to the Authorize attribute on classes and actions is nothing new to ASP.NET, but now the same thing can be achieved with policies.
+1. Open the Startup.cs class and add the following after ```services.AddMvc();```
+```c#
+services.AddAuthorization(options =>
+{
+    options.AddPolicy("SalesAndITOnly", policy=> policy.RequireClaim("Department", "Sales", "IT"));
+    options.AddPolicy("ManagersOnly", policy=> policy.RequireRole("Manager"));
+});
+```
+2. Replace the class Authorize attribute with:
+```c#
+Authorize(Policy = "SalesAndITOnly")]
+```
+3. Replace the GetManagerDocuments() Authorize attribute with:
+```c#
+[Authorize(Policy= "ManagersOnly")]
+```
+4. Test in Postman to make sure you get the same results.
+
+### Only Managers of the IT Department can delete documents.
+When we created the policies in the last example we only did one claim and role check, but you can have more than one which can give you finer grain of control of enforcing requirements.
+1. Add the following policy after "ManagersOnly":
+```c#
+options.AddPolicy("ITManagerOnly", policy =>
+{
+    policy.RequireClaim("Department", "IT");
+    policy.RequireRole("Manager");
+});
+```
+2. Add the following Authorize attribute to the ```DeleteDocument``` method.
+```c#
+ [Authorize(Policy = "ITManagerOnly")]
+ ```
+ 3. Test results in Postman.
+
+### Members can only view documents for their department or flagged as All.
+Claims can also be used to build queries to enforce requirements.
+1. Replace the ```GetPublicDocuments()`` method with:
+```c#
+[HttpGet]
+[Route("")]
+public IActionResult GetPublicDocuments()
+{
+    _logger.LogInformation("Public Documents were accessed.");
+
+    var department = User.FindFirstValue("Department");
+
+    var documents = GetDocuments()
+        .Where(
+            p =>
+                (p.Department == "All" ||
+                    p.Department.Equals(department, StringComparison.CurrentCultureIgnoreCase))
+                && !p.ManagerOnly);
+
+    return Ok(documents);
+}
+```
+2. And replace the ```GetManagerDocuments()``` method with:
+```c#
+[HttpGet]
+[Route("managers")]
+[Authorize(Policy= "ManagersOnly")]
+public IActionResult GetManagerDocuments()
+{
+    _logger.LogInformation("Manager Documents were accessed.");
+    var department = User.FindFirstValue("Department");
+    var documents = GetDocuments()
+        .Where(
+            p =>
+                (p.Department == "All" ||
+                    p.Department.Equals(department, StringComparison.CurrentCultureIgnoreCase))
+                && p.ManagerOnly);
+
+    return Ok(documents);
+}
+```
+### Resource Authorization
+The last three requirements:
+1. Members can only view documents from their department or flagged as All.
+2. Members can create documents for their departments or All.
+3. Documents can only be modified by owners or department managers.
+
+These policies are more complex and resource dependent. In these kinds of cases you can't use a configured policy. You'll need to use authorization as a service and have it injected into your controller. That has already been done, but a handler still needs to be created for the service to use.
+
+1. Under the "Membership" folder create a new folder nammed "Custom".
+2. Add a new class named ```DocumentAuthorizationHandler.cs``` and add the following:
+```c#
+namespace IdentityDemo.Membership.Custom
+{
+    public class DocumentAuthorizationHandler :
+       AuthorizationHandler<OperationAuthorizationRequirement, Document>
+    {
+        protected override Task HandleRequirementAsync(AuthorizationHandlerContext context,
+                                                    OperationAuthorizationRequirement requirement,
+                                                    Document resource)
+        {
+            var isManager = context.User.IsInRole("Manager");
+            var department = context.User.FindFirstValue("Department");
+
+            switch (requirement.Name)
+            {
+                case "Read":
+                    if (resource.ManagerOnly && !isManager ||
+                        resource.Department != department)
+                    {
+                        context.Fail();
+                    }
+                    else
+                    {
+                        context.Succeed(requirement);
+                    }
+                    break;
+                case "Update":
+
+                    if (resource.Owner == context.User.FindFirstValue(ClaimTypes.NameIdentifier))
+                    {
+                        context.Succeed(requirement);
+                    }
+                    else if (isManager && resource.Department == department)
+                    {
+                        context.Succeed(requirement);
+                    }
+                    else
+                    {
+                        context.Fail();
+                    }
+                    break;
+            } 
+            return Task.CompletedTask;
+        }
+    }
+}
+```
+3. Add a class named ```Operations.cs``` and add the following:
+```c#
+namespace IdentityDemo.Membership.Custom
+{
+    public static class Operations
+    {
+        public static OperationAuthorizationRequirement Create =
+            new OperationAuthorizationRequirement { Name = "Create" };
+        public static OperationAuthorizationRequirement Read =
+            new OperationAuthorizationRequirement { Name = "Read" };
+        public static OperationAuthorizationRequirement Update =
+            new OperationAuthorizationRequirement { Name = "Update" };
+        public static OperationAuthorizationRequirement Delete =
+            new OperationAuthorizationRequirement { Name = "Delete" };
+    }
+}
+```
+This will serve as a helper class for the ```OperationAuthorizationRequirement``` class for passing this requirement as a parameter.
+
+4. Back in the ```DocumentsController``` replace the ```GetDocument(int id)``` method with:
+```c#
+[HttpGet]
+[Route("{id:int}")]
+public async Task<IActionResult> GetDocument(int id)
+{
+    _logger.LogInformation($"Public Document {id} were accessed.");
+
+    var result = GetDocuments().FirstOrDefault(d => d.Id == id);
+
+    if (result == null)
+    {
+        return NotFound();
+    }
+
+    if (!await _authorizationService.AuthorizeAsync(User, result, Operations.Read))
+    {
+        return StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    return Ok(result);
+}
+```
+4. Replace the ```CreateDepartmentDocument``` and ```UpdateDeparmentDocument``` methods with:
+```c#
+[HttpPost]
+public IActionResult CreateDepartmentDocument([FromBody] Document model)
+{
+    if (!ModelState.IsValid)
+    {
+        return BadRequest(ModelState);
+    }
+
+    var department = User.FindFirstValue("Department");
+    var isManager = User.IsInRole("Manager");
+
+    model.Id = GetDocuments().Count() + 1;
+    model.Owner = User.FindFirstValue(ClaimTypes.NameIdentifier);
+    model.Department = department;
+    if (model.ManagerOnly && !isManager)
+    {
+        model.ManagerOnly = false;
+    }
+    _logger.LogInformation("Document created");
+
+    return Ok(model);
+}
+
+[HttpPut]
+[Route("{id:int}")]
+public async Task<IActionResult> UpdateDeparmentDocument(int id, [FromBody] Document model)
+{
+    var document = GetDocuments().FirstOrDefault(p => p.Id == id);
+    if (document == null)
+    {
+        return NotFound();
+    }
+
+    if (! await _authorizationService.AuthorizeAsync(User, document, Operations.Update))
+    {
+        return StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    document.Content = model.Content;
+    document.Department = model.Department;
+    document.ManagerOnly = model.ManagerOnly;
+    document.Owner = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    _logger.LogInformation("Document Modified");
+    return Ok(document);
+}
+```
+5. Test results in Postman.
+
