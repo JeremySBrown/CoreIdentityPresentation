@@ -763,7 +763,12 @@ namespace IdentityDemo.Membership.Custom
 ```
 This will serve as a helper class for the ```OperationAuthorizationRequirement``` class for passing this requirement as a parameter.
 
-4. Back in the ```DocumentsController``` replace the ```GetDocument(int id)``` method with:
+4. Register the handler in ```ConfigureServices``` method :
+```c#
+services.AddSingleton<IAuthorizationHandler, DocumentAuthorizationHandler>();
+```
+
+5. Back in the ```DocumentsController``` replace the ```GetDocument(int id)``` method with:
 ```c#
 [HttpGet]
 [Route("{id:int}")]
@@ -786,7 +791,7 @@ public async Task<IActionResult> GetDocument(int id)
     return Ok(result);
 }
 ```
-4. Replace the ```CreateDepartmentDocument``` and ```UpdateDeparmentDocument``` methods with:
+6. Replace the ```CreateDepartmentDocument``` and ```UpdateDeparmentDocument``` methods with:
 ```c#
 [HttpPost]
 public IActionResult CreateDepartmentDocument([FromBody] Document model)
@@ -835,5 +840,5 @@ public async Task<IActionResult> UpdateDeparmentDocument(int id, [FromBody] Docu
     return Ok(document);
 }
 ```
-5. Test results in Postman.
+7. Test results in Postman.
 
