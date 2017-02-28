@@ -12,6 +12,10 @@
 "Microsoft.EntityFrameworkCore.SqlServer": "1.0.1",
 "Microsoft.EntityFrameworkCore.Tools": "1.0.0-preview2-final"
 ```
+Also to keep EF Core happy change the version of ```Microsoft.Extensions.Logging``` to ```1.0.1```
+```javascript
+"Microsoft.Extensions.Logging": "1.0.1",
+```
 4. Add the following to "tools" section after "dependencies"
 ```javascript
 "Microsoft.EntityFrameworkCore.Tools": {
@@ -23,7 +27,7 @@
     1. In Models folder Add new class ApplicationUser that extends IdentityUser and adds three custom properties to user model.
 
 ```c#
-namespace IdentityDemo.Membership
+namespace IdentityDemo.Membership.Models
 {
     public class ApplicationUser : IdentityUser
     {
@@ -56,6 +60,8 @@ namespace IdentityDemo.Membership
 ```
 7. Open Startup.cs class and add the following services in Configuration method.
 ```c#
+services.AddSingleton(Configuration);
+
 services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<MembershipDbContext>()
     .AddDefaultTokenProviders();
@@ -197,6 +203,9 @@ public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerF
 ```
 13. Open a command prompt to the project's folder and use the following commands build the database
 ```
+dotnet restore
+```
+```
 dotnet ef migrations add AddIdentitySupport
 ```
 ```
@@ -231,21 +240,27 @@ namespace IdentityDemo.Controllers
     [Route("api/[controller]")]
     public class AuthController : Controller
     {
+        private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly ILogger<AuthController> _logger;
-        private readonly UserManager<WidgetUser> _userManager;
-        private readonly IPasswordHasher<WidgetUser> _passwordHasher;
         private readonly IConfigurationRoot _configuration;
+        private readonly IPasswordHasher<ApplicationUser> _passwordHasher;
 
         public AuthController(
-            ILogger<AuthController> logger,
-            UserManager<WidgetUser> userManager,
-            IPasswordHasher<WidgetUser> passwordHasher,
-            IConfigurationRoot configuration)
+             SignInManager<ApplicationUser> signInManager,
+             UserManager<ApplicationUser> userManager,
+             RoleManager<IdentityRole> roleManager,
+             ILogger<AuthController> logger,
+             IConfigurationRoot configuration,
+             IPasswordHasher<ApplicationUser> passwordHasher)
         {
-            _logger = logger;
+            _signInManager = signInManager;
             _userManager = userManager;
-            _passwordHasher = passwordHasher;
+            _roleManager = roleManager;
+            _logger = logger;
             _configuration = configuration;
+            _passwordHasher = passwordHasher;
         }
 
         [HttpPost]
@@ -339,7 +354,7 @@ app.UseJwtBearerAuthentication(new JwtBearerOptions()
 3. Open appsettings.json and add the following after "Data":
 ```
   "Tokens": {
-    "Key": "CyAFooBarQuuxIsTheStandardTypeOfStringWeUse12345",
+    "Key": "123This!Is!The!Secret!String!T0!Secure!Your!Tokens456",
     "Issuer": "http://fakecompany.io",
     "Audience": "http://fakecompany.io"
   }
@@ -412,6 +427,8 @@ public async Task<IActionResult> CreateToken([FromBody]Credentials credentials)
     return BadRequest("Token Creation Failed");
 }
 ```
+
+You may need to clear your cookies and restart Chrome and Postman or token authentication won't work as expected because ASP.NET will validate the cookie token first and authorize the user giving false positive results for the next section.
 
 ## DEMO 4: Applying Authorization
 1. Add a new class named "Document.cs" to Models folder with the following code:
@@ -563,7 +580,9 @@ namespace IdentityDemo.Controllers
                 new Document(3, "Manager Document 1", "All", "djones", true),
                 new Document(4, "Manager Document 2", "IT", "cwilliams", true),
                 new Document(5, "Sales Document 1", "Sales", "asmith", false),
-                new Document(6, "IT Document 1", "IT", "bjohnson", false),
+                new Document(6, "IT Document 1", "IT", "bjohnson", false),                
+                new Document(7, "IT Document 1", "IT", "bjohnson", false),
+                new Document(8, "IT Document 2", "IT", "cwilliams", false),
             };
         }
     }
@@ -622,7 +641,7 @@ services.AddAuthorization(options =>
 ```
 2. Replace the class Authorize attribute with:
 ```c#
-Authorize(Policy = "SalesAndITOnly")]
+[Authorize(Policy = "SalesAndITOnly")]
 ```
 3. Replace the GetManagerDocuments() Authorize attribute with:
 ```c#
