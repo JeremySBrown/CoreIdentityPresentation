@@ -10,10 +10,8 @@ You can either clone the sample application from this repo or can you build it f
 
 Clone the main repo:
 ```
-git clone https://github.com/TRINUG-Meetup/ASP_NET_Core_Sig.git
+git clone https://github.com/JeremySBrown/CoreIdentityPresentation
 ```
-Navigate to the folder ASP_NET_Core_Sig/Session3/Identity/IdentityDemo/
-
 Open a command line to the root of the project and using the following commands to build the application.
 
 Restore packages
