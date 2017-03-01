@@ -8,7 +8,7 @@
 	},
 	"item": [
 		{
-			"name": "0 Log Ins",
+			"name": "1 Logins",
 			"description": "",
 			"item": [
 				{
@@ -176,7 +176,7 @@
 					"response": []
 				},
 				{
-					"name": "Rouge Login",
+					"name": "Inter Login",
 					"event": [
 						{
 							"listen": "test",
@@ -210,7 +210,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{userName:\"bjohnson\",password:\"AbCd!234\"}"
+							"raw": "{userName:\"emiller\",password:\"AbCd!234\"}"
 						},
 						"description": ""
 					},
@@ -256,11 +256,31 @@
 						"description": ""
 					},
 					"response": []
+				},
+				{
+					"name": "Cooke Login",
+					"request": {
+						"url": "{{url}}/auth/login",
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": ""
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{userName:\"emiller\",password:\"AbCd!234\"}"
+						},
+						"description": ""
+					},
+					"response": []
 				}
 			]
 		},
 		{
-			"name": "1 Wide Open API Calls",
+			"name": "2 No Token API Calls",
 			"description": "",
 			"item": [
 				{
@@ -290,29 +310,13 @@
 					"request": {
 						"url": "{{url}}/documents/managers",
 						"method": "GET",
-						"header": [],
-						"body": {},
-						"description": ""
-					},
-					"response": []
-				},
-				{
-					"name": "Sales Department Documents",
-					"request": {
-						"url": "{{url}}/documents/department/sales",
-						"method": "GET",
-						"header": [],
-						"body": {},
-						"description": ""
-					},
-					"response": []
-				},
-				{
-					"name": "IT Department Documents",
-					"request": {
-						"url": "{{url}}/documents/department/it",
-						"method": "GET",
-						"header": [],
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "bearer {{token}}",
+								"description": ""
+							}
+						],
 						"body": {},
 						"description": ""
 					},
@@ -361,7 +365,7 @@
 			]
 		},
 		{
-			"name": "2 Sales Staff Tests",
+			"name": "3 Token API Calls",
 			"description": "",
 			"item": [
 				{
@@ -466,65 +470,6 @@
 					"response": []
 				},
 				{
-					"name": "Sales Dept Documents by Staff",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"tests[\"Status code is 200\"] = responseCode.code === 200;",
-									"var jsonData = JSON.parse(responseBody);",
-									"tests[\"List Of Documents Returned\"] = jsonData.length > 0;"
-								]
-							}
-						}
-					],
-					"request": {
-						"url": "{{url}}/documents/department/sales",
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "bearer {{token}}",
-								"description": ""
-							}
-						],
-						"body": {},
-						"description": ""
-					},
-					"response": []
-				},
-				{
-					"name": "IT Dept Documents by Staff",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"tests[\"Status code is 401\"] = responseCode.code === 401;",
-									""
-								]
-							}
-						}
-					],
-					"request": {
-						"url": "{{url}}/documents/department/it",
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "bearer {{token}}",
-								"description": ""
-							}
-						],
-						"body": {},
-						"description": ""
-					},
-					"response": []
-				},
-				{
 					"name": "Sales Staff Create Document",
 					"event": [
 						{
@@ -590,7 +535,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{content:\"Test Create IT Document\",department:\"IT\"}"
+							"raw": "{content:\"Test Create IT Document\",department:\"IT\", managerOnly:true, owner:\"djones\"}"
 						},
 						"description": ""
 					},
@@ -722,6 +667,23 @@
 							"mode": "raw",
 							"raw": "{\n  \"id\": 6,\n  \"content\": \"Sales Document Modified\",\n  \"department\": \"Sales\",\n  \"owner\": \"djones\",\n  \"managerOnly\": true\n}"
 						},
+						"description": ""
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Document",
+					"request": {
+						"url": "{{url}}/documents/4",
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "bearer {{token}}",
+								"description": ""
+							}
+						],
+						"body": {},
 						"description": ""
 					},
 					"response": []
