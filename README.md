@@ -328,7 +328,7 @@ services.Configure<IdentityOptions>(options =>
 ```
 By default Identity will redirect to the a login page which does not exist in an API. The above code simply adds handlers for the Application Cookie events for redirecting and just return standard status codes.
 
-8. Using Postman to test Login and Values
+Use Postman to test Login and Values
 
 ## DEMO 3: Adding JWT to ASP.NET API Project
 Open project.json and add the following to dependencies:
@@ -466,7 +466,7 @@ namespace IdentityDemo.Models
     }
 }
 ```
-2. Add a new Controller named "DocumentsController.cs" with the following code:
+Add a new Controller named "DocumentsController.cs" with the following code:
 ```c#
 namespace IdentityDemo.Controllers
 {
