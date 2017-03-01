@@ -1,4 +1,39 @@
 # ASP.NET Core Identity
+## Overview
+This presentation provides an overview of ASP.NET Core Identity and will demonstrate how to secure an ASP.NET Core API project using Identity and JSON Web Tokens.
+
+## Sample Application and Demos
+
+The latest LTS version of .NET Core was used for the sample application. You can install it from [https://dot.net](https://dot.net). 
+
+You can either clone the sample application from this repo or can you build it following the rest of this document.
+
+Clone the main repo:
+```
+git clone https://github.com/TRINUG-Meetup/ASP_NET_Core_Sig.git
+```
+Navigate to the folder ASP_NET_Core_Sig/Session3/Identity/IdentityDemo/
+
+Open a command line to the root of the project and using the following commands to build the application.
+
+Restore packages
+```
+dotnet restore
+```
+Build and Create Database
+```
+dotnet ef database update
+```
+You can launch the application from Visual Studio or from the command line using:
+```
+dotnet run
+```
+
+### Postman
+During the presentation I'll be using POSTMAN to test the API endpoints. You can install it from:
+[https://www.getpostman.com/](https://www.getpostman.com/)
+
+Once installed you can import the collection I used to test the application. The import file ```IdentityDemo.postman_collection.json``` can be found in the project's root folder 
 
 ## DEMO 1: Adding Identity to ASP.NET Core API Project
 
